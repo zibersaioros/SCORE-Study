@@ -428,6 +428,55 @@ https://www.ubuntu.com/download/desktop/thank-you?country=KR&version=18.04.2&arc
 ##### 2. Hyper-V로 VM 생성
 1. Hyper-V 관리자 실행
 2. 새로만들기 -> 가상 컴퓨터 클릭
-3. ![이름 및 위치 지정](./img/hyper-v1.PNG)
-4. ![세대 지정](./img/hyper-v2.PNG)
-5. ![메모리 할당](./img/hyper-v3.PNG)
+3. 이름 및 위치 지정
+![이름 및 위치 지정](./img/hyper-v1.PNG)
+4. 세대 지정
+![세대 지정](./img/hyper-v2.PNG)
+5. 메모리 할당
+![메모리 할당](./img/hyper-v3.PNG)
+6. 네트워킹 구성
+![네트워킹 구성](img/hyper-v4.PNG)
+7. 가상 하드 디스크 연결
+![가상 하드 디스크 연결](img/hyper-v5.PNG)
+8. 설치 옵션
+![설치 옵션](img/hyper-v6.PNG)
+9. VM 생성후 연결
+10. 우분투 인스톨 실행
+
+#### T-bears 인스톨
+```bash
+$ sudo apt-get update
+# 18.04에서는 libleveldb1 대신 libleveldb1v5 사용
+$ sudo apt-get install libleveldb1v5 libleveldb-dev
+$ sudo apt-get install libsecp256k1-dev
+# 문서와 달리 pkg-config 별도로 인스톨 해야함
+$ sudo apt-get install pkg-config
+
+# install RabbitMQ
+$ sudo apt-get install rabbitmq-server
+
+$ mkdir icon
+$ cd icon
+
+$ conda create --name icon python=3.6
+$ conda activate icon
+
+(icon) $ pip install tbears
+```
+
+#### ICON SDK 설치 (Python)
+``` bash
+(icon) $ pip install iconsdk
+```
+
+#### Pycharm
+##### 설치
+```bash
+$ sudo snap install pycharm-community --classic
+```
+##### 가상환경 셋팅
+pycharm을 ICON 가상환경으로 셋팅한다.
+1. 파이참 기존 인터프리터 선택
+![파이참 기존 인터프리터 선택](img/pycharm1.png)
+2. Conda Environment 선택 후 icon 환경 선택
+![Conda Environment 선택 후 icon 환경 선택](img/pycharm2.png)
