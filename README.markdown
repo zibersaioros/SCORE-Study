@@ -440,7 +440,8 @@ https://www.ubuntu.com/download/desktop/thank-you?country=KR&version=18.04.2&arc
 ![가상 하드 디스크 연결](img/hyper-v5.PNG)
 8. 설치 옵션
 ![설치 옵션](img/hyper-v6.PNG)
-9. VM 생성후 연결
+9. VM 생성후 부팅설정을 UEFI로 변경
+![VM 생성후 부팅설정 변경](img/hyper-v7.PNG)
 10. 우분투 인스톨 실행
 
 #### T-bears 인스톨
