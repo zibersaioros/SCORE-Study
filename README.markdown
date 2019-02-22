@@ -428,6 +428,6 @@ https://www.ubuntu.com/download/desktop/thank-you?country=KR&version=18.04.2&arc
 ##### 2. Hyper-V로 VM 생성
 1. Hyper-V 관리자 실행
 2. 새로만들기 -> 가상 컴퓨터 클릭
-3. ![이름 및 위치 지정](_posts/img/hyper-v1.PNG)
-4. ![세대 지정](_posts/img/hyper-v2.PNG)
-5. ![메모리 할당](_posts/img/hyper-v3.PNG)
+3. ![이름 및 위치 지정](./img/hyper-v1.PNG)
+4. ![세대 지정](./img/hyper-v2.PNG)
+5. ![메모리 할당](./img/hyper-v3.PNG)
