@@ -481,3 +481,79 @@ pycharm을 ICON 가상환경으로 셋팅한다.
 ![파이참 기존 인터프리터 선택](img/pycharm1.png)
 2. Conda Environment 선택 후 icon 환경 선택
 ![Conda Environment 선택 후 icon 환경 선택](img/pycharm2.png)
+
+#### Python SDK로 컨트랙트배포
+```python
+from iconsdk.icon_service import IconService
+from iconsdk.providers.http_provider import HTTPProvider
+from iconsdk.wallet.wallet import KeyWallet
+from iconsdk.builder.transaction_builder import DeployTransactionBuilder
+from iconsdk.signed_transaction import SignedTransaction
+from pathlib import Path
+
+# IconService클래스는 API를 제공한다. JSON-RPC서버와 통신하는 HTTPProvider를 인자로 받는다.
+# provider는 IconService가 루프체인에 접속하는 방법을 정의.
+
+#get IconService Instance
+icon_service = IconService(HTTPProvider("https://bicon.net.solidwallet.io/api/v3"))
+
+#get wallet instance
+wallet = KeyWallet.load("./keystore.json", open("./password.txt", "r").readLine())
+
+# build the transaction for deployment
+transaction = DeployTransactionBuilder()\
+    .from_(wallet.get_address())\
+    .to("cx0000000000000000000000000000000000000000") # address 0 means SCORE install\
+    .step_limit(1000000)\
+    .nid(3)\
+    .nonce(100)\
+    .content_type("application/zip")\
+    .content(Path("./hellworld.zip").read_bytes())\
+    .build()
+
+#get signed transaction
+signed_transaction = SignedTransaction(transcation, wallet)
+
+#send transaction
+tx_hash = icon_service.send_transaction(signed_transaction)
+print(tx_hash)
+```
+**결과 확인**
+![python_deploy1](images/2019/02/python-deploy1.png)
+> 해봤는데 잘 안 되고 에러 남... 원인은 불명
+
+#### Python SDK로 컨트랙트 메서드 호출
+```python
+from iconsdk.icon_service import IconService
+from iconsdk.providers.http_provider import HTTPProvider
+from iconsdk.wallet.wallet import KeyWallet
+from iconsdk.builder.call_builder import CallBuilder
+
+node_uri = "https://bicon.net.solidwallet.io/api/v3"
+network_id = 3 #테스트넷 아이디
+hello_world_address = "cx2726c62bab30071ced0af632233c734f5db917ad"
+keystore_path = "./keystore.json"
+keystore_pw = open("./password.txt", "r").readLine()
+
+#get IconService Instance
+icon_service = IconService(HTTPProvider(node_uri))
+
+#get wallet instance
+wallet = KeyWallet.load(keystore_path, keystore_pw)
+
+# build the icx_call
+call = CallBuilder()\
+    .from_(wallet.get_address())\
+    .to(hello_world_address)\
+    .method("hello")\
+    .build()
+
+# don't need to sign when you call read-only function
+
+result = icon_service.call(call)
+print(result)
+```
+**결과확인**
+```
+Hello
+```
