@@ -498,7 +498,9 @@ from iconsdk.libs.in_memory_zip import gen_deploy_data_content
 icon_service = IconService(HTTPProvider("https://bicon.net.solidwallet.io/api/v3"))
 
 #get wallet instance
-wallet = KeyWallet.load("./keystore.json", open("./password.txt", "r").readLine())
+keystore_path = "./keystore.json"
+keystore_pw = open("./password.txt", "r").readLine()
+wallet = KeyWallet.load(keystore_path, keystore_pw)
 
 # build the transaction for deployment
 transaction = DeployTransactionBuilder()\
@@ -529,14 +531,13 @@ from iconsdk.providers.http_provider import HTTPProvider
 from iconsdk.wallet.wallet import KeyWallet
 from iconsdk.builder.call_builder import CallBuilder
 
-node_uri = "https://bicon.net.solidwallet.io/api/v3"
-network_id = 3 #테스트넷 아이디
+
 hello_world_address = "cx2726c62bab30071ced0af632233c734f5db917ad"
 keystore_path = "./keystore.json"
 keystore_pw = open("./password.txt", "r").readLine()
 
 #get IconService Instance
-icon_service = IconService(HTTPProvider(node_uri))
+icon_service = IconService(HTTPProvider("https://bicon.net.solidwallet.io/api/v3"))
 
 #get wallet instance
 wallet = KeyWallet.load(keystore_path, keystore_pw)
@@ -628,15 +629,14 @@ from iconsdk.signed_transaction import SignedTransaction
 from iconsdk.wallet.wallet import KeyWallet
 
 
-uri = "https://bicon.net.solidwallet.io/api/v3"
 network_id = 3 #테스트넷 아이디임.
 score_address = "cx0b54a59277bfc49694e435877082cca3043ffab7";
-keystore_path = "./keystore.json"
-keystore_pw = open("./password.txt", "r").readline()
 
 # get IconService instance
-icon_service = IconService(HTTPProvider(uri))
+icon_service = IconService(HTTPProvider("https://bicon.net.solidwallet.io/api/v3"))
 # get wallet instance
+keystore_path = "./keystore.json"
+keystore_pw = open("./password.txt", "r").readline()
 wallet = KeyWallet.load(keystore_path, keystore_pw)
 
 transaction = TransactionBuilder()\
@@ -644,7 +644,7 @@ transaction = TransactionBuilder()\
     .to(score_address)\
     .step_limit(0x59682f00)\
     .value(1000000000000000000)\
-    .nid(3)\
+    .nid(network_id)\
     .nonce(100)\
     .build()
 
@@ -833,7 +833,9 @@ from iconsdk.signed_transaction import SignedTransaction
 from iconsdk.libs.in_memory_zip import gen_deploy_data_content
 
 icon_service = IconService(HTTPProvider("https://bicon.net.solidwallet.io/api/v3"))
-wallet = KeyWallet.load("./keystore.json", open("./password.txt", "r").readline())
+keystore_path = "./keystore.json"
+keystore_pw = open("./password.txt", "r").readline()
+wallet = KeyWallet.load(keystore_path, keystore_pw)
 
 # generate instance of transaction
 transaction = DeployTransactionBuilder()\
@@ -856,3 +858,143 @@ print(tx_hash)
 ```
 **결과확인**
 ![토큰배포결과확인](images/2019/02/토큰배포결과확인.png)
+
+#### 샘플 토큰 전송
+```python
+from iconsdk.builder.transaction_builder import CallTransactionBuilder
+from iconsdk.icon_service import IconService
+from iconsdk.providers.http_provider import HTTPProvider
+from iconsdk.signed_transaction import SignedTransaction
+from iconsdk.wallet.wallet import KeyWallet
+
+
+network_id = 3 #테스트넷 아이디임.
+score_address = "cx852677db1e305829865f55bbdf0297713dfba82a";
+# get IconService instance
+icon_service = IconService(HTTPProvider("https://bicon.net.solidwallet.io/api/v3"))
+# get wallet instance
+keystore_path = "./keystore.json"
+keystore_pw = open("./password.txt", "r").readline()
+wallet = KeyWallet.load(keystore_path, keystore_pw)
+
+transaction = CallTransactionBuilder()\
+    .from_(wallet.get_address())\
+    .to(score_address)\
+    .step_limit(0x59682f00)\
+    .nid(network_id)\
+    .nonce(100)\
+    .method("transfer")\
+    .params({"_to": "hxb1c73381e270d401a8f8b3f969f97457cca32d6d", "_value": 10000000000000000000})\
+    .build()
+
+signed_transaction = SignedTransaction(transaction, wallet)
+
+result = icon_service.send_transaction(signed_transaction)
+print(result)
+```
+
+**결과확인**
+![토큰전송](images/2019/02/토큰전송.png)
+
+#### Hello world Unit Test
+##### 테스트 코드
+```python
+import os
+
+from iconsdk.builder.transaction_builder import DeployTransactionBuilder
+from iconsdk.builder.call_builder import CallBuilder
+from iconsdk.icon_service import IconService
+from iconsdk.libs.in_memory_zip import gen_deploy_data_content
+from iconsdk.providers.http_provider import HTTPProvider
+from iconsdk.signed_transaction import SignedTransaction
+
+from tbears.libs.icon_integrate_test import IconIntegrateTestBase, SCORE_INSTALL_ADDRESS
+
+DIR_PATH = os.path.abspath(os.path.dirname(__file__))
+
+
+class TestHelloworld(IconIntegrateTestBase):
+    TEST_HTTP_ENDPOINT_URI_V3 = "http://127.0.0.1:9000/api/v3"
+    SCORE_PROJECT = os.path.abspath(os.path.join(DIR_PATH, '..'))
+
+    def setUp(self):
+        super().setUp()
+
+        self.icon_service = None
+        # if you want to send request to network, uncomment next line and set self.TEST_HTTP_ENDPOINT_URI_V3
+        # self.icon_service = IconService(HTTPProvider(self.TEST_HTTP_ENDPOINT_URI_V3))
+
+        # install SCORE
+        self._score_address = self._deploy_score()['scoreAddress']
+
+    def _deploy_score(self, to: str = SCORE_INSTALL_ADDRESS) -> dict:
+        # Generates an instance of transaction for deploying SCORE.
+        transaction = DeployTransactionBuilder() \
+            .from_(self._test1.get_address()) \
+            .to(to) \
+            .step_limit(100_000_000_000) \
+            .nid(3) \
+            .nonce(100) \
+            .content_type("application/zip") \
+            .content(gen_deploy_data_content(self.SCORE_PROJECT)) \
+            .build()
+
+        # Returns the signed transaction object having a signature
+        signed_transaction = SignedTransaction(transaction, self._test1)
+
+        # process the transaction in local
+        tx_result = self.process_transaction(signed_transaction, self.icon_service)
+
+        self.assertTrue('status' in tx_result)
+        self.assertEqual(1, tx_result['status'])
+        self.assertTrue('scoreAddress' in tx_result)
+
+        return tx_result
+
+    def test_score_update(self):
+        # update SCORE
+        tx_result = self._deploy_score(self._score_address)
+
+        self.assertEqual(self._score_address, tx_result['scoreAddress'])
+
+    def test_call_hello(self):
+        # Generates a call instance using the CallBuilder
+        call = CallBuilder().from_(self._test1.get_address()) \
+            .to(self._score_address) \
+            .method("hello") \
+            .build()
+
+        # Sends the call request
+        response = self.process_call(call, self.icon_service)
+
+        self.assertEqual("Hello", response)
+```
+
+##### 테스트 실행
+```bash
+# with T-Bears command
+$ tbears test helloworld
+
+# with python
+$ python -m unittest discover helloworld
+```
+
+##### 코드 분석
+###### IconIntegrateTestBase
+SCORE 테스트 클래스는 반드시 IconIntegrateTestBase을 상속받아야 한다.
+IconIntegrateTestBase 클래스는 아래의 기능을 제공한다.
+1. python 단위테스트
+    - test_를 접두어로 붙여 테스트메서드를 작성
+    - setUp, tearDown 메서드를 오버라이드해서 테스트를 초기화 및 자원반납을 할 수 있다.
+2. ICON 서비스 테스트 환경구성
+    - 테스트 환경을 초기화하고, 제네시스블록을 셋팅
+    - 테스트용 account 제공
+        - self._test1 : 코인을 많이 갖고 있는 테스트계정
+        - self._wallet_array[]: 테스트용 계정 배열 (기본으로 10개 제공)
+3. 통합 테스트용 API 제공
+    - self.process_transaction() : 트랜잭션을 실행하고 결과 반환
+    - self.process_call() : SCORE의 read-only 전역 메서드를 호출하고 결과반환
+
+###### self.icon_service
+self.icon_service가 None이면 Mock환경을 구성하여 단위테스트로 수행
+self.icon_service에 IconService를 할당하면 실제 테스트넷이나 로컬테스트넷에 접속하여 통합테스트 수행
