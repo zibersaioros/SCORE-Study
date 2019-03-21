@@ -137,7 +137,7 @@ declaration | description
 
 ---
 
-### Type hints, Exception handling
+### Type hints, Exception handling, Limitations
 #### Type hints
 파라미터, 리턴이 어떤 타입일지 힌트를 주는 것. SCORE에서는 Type hints를 반드시 지정해야 한다. SCORE의 API 스펙이 type hints를 기반으로 생성되기 때문.<br />
 파라미터엔 int, str, bytes, bool, Address 가 올 수 있다.
@@ -146,7 +146,7 @@ declaration | description
 #### Exception handling
 Exception 처리시 IconServiceBaseException을 상속받아 처리하기보단  revert()를 사용하길 권장
 
-### 제한사항
+#### 제한사항
 * 트랜잭션당 한번에 최대 도합 1024번의 call, interface call, Icx 전송만 가능
 * 트랜잭션당 외부 SCORE 호출로인해 증가할 수 있는 스택사이즈는 최대 64개이다.
 * states에 의해 관리되지 않는 멤버변수는 선언할 수 없다.
