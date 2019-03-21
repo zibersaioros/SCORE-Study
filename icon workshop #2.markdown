@@ -1,10 +1,10 @@
 # ICON Workshop 2일
 ---
-
 <!-- TOC -->
 - [ICON Workshop 2일](#icon-workshop-2%EC%9D%BC)
-    - [SCORE란?](#score%EB%9E%80)
-    - [SCORE 특징](#score-%ED%8A%B9%EC%A7%95)
+    - [Score](#score)
+        - [SCORE란?](#score%EB%9E%80)
+        - [SCORE 특징](#score-%ED%8A%B9%EC%A7%95)
     - [Score 구현가이드](#score-%EA%B5%AC%ED%98%84%EA%B0%80%EC%9D%B4%EB%93%9C)
         - [iconservice API](#iconservice-api)
         - [클래스](#%ED%81%B4%EB%9E%98%EC%8A%A4)
@@ -38,7 +38,7 @@
 <!-- /TOC -->
 ---
 
-##Score
+## Score
 ### SCORE란?
 ICON 네트워크에서 동작하는 스마트 컨트랙트.
 <br />
