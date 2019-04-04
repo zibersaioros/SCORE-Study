@@ -1,6 +1,8 @@
 # ICON Workshop 2일
 ---
+
 <!-- TOC -->
+
 - [ICON Workshop 2일](#icon-workshop-2%EC%9D%BC)
     - [Score](#score)
         - [SCORE란?](#score%EB%9E%80)
@@ -34,8 +36,28 @@
             - [Type hints](#type-hints)
             - [Exception handling](#exception-handling)
             - [제한사항](#%EC%A0%9C%ED%95%9C%EC%82%AC%ED%95%AD)
+    - [Score Sample](#score-sample)
+        - [Black Jack](#black-jack)
+            - [Business flow](#business-flow)
+                - [chip 발행용 SCORE 배포](#chip-%EB%B0%9C%ED%96%89%EC%9A%A9-score-%EB%B0%B0%ED%8F%AC)
+                - [BlackJack 게임용 SCORE 배포](#blackjack-%EA%B2%8C%EC%9E%84%EC%9A%A9-score-%EB%B0%B0%ED%8F%AC)
+                - [공통파일 작성](#%EA%B3%B5%ED%86%B5%ED%8C%8C%EC%9D%BC-%EC%9E%91%EC%84%B1)
+                - [ICX로 chip 환전](#icx%EB%A1%9C-chip-%ED%99%98%EC%A0%84)
+                - [chip 잔액 확인](#chip-%EC%9E%94%EC%95%A1-%ED%99%95%EC%9D%B8)
+                - [방 생성](#%EB%B0%A9-%EC%83%9D%EC%84%B1)
+                - [방 목록 확인](#%EB%B0%A9-%EB%AA%A9%EB%A1%9D-%ED%99%95%EC%9D%B8)
+                - [방 입장](#%EB%B0%A9-%EC%9E%85%EC%9E%A5)
+                - [레디 상태 변환](#%EB%A0%88%EB%94%94-%EC%83%81%ED%83%9C-%EB%B3%80%ED%99%98)
+                - [게임 시작](#%EA%B2%8C%EC%9E%84-%EC%8B%9C%EC%9E%91)
+                - [패 돌리기](#%ED%8C%A8-%EB%8F%8C%EB%A6%AC%EA%B8%B0)
+                - [손패 보기](#%EC%86%90%ED%8C%A8-%EB%B3%B4%EA%B8%B0)
+                - [손패 픽스](#%EC%86%90%ED%8C%A8-%ED%94%BD%EC%8A%A4)
+                - [게임 결과 확인](#%EA%B2%8C%EC%9E%84-%EA%B2%B0%EA%B3%BC-%ED%99%95%EC%9D%B8)
+                - [방 나가기](#%EB%B0%A9-%EB%82%98%EA%B0%80%EA%B8%B0)
+                - [ICX로 환전](#icx%EB%A1%9C-%ED%99%98%EC%A0%84)
 
 <!-- /TOC -->
+
 ---
 
 ## Score
