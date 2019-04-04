@@ -187,3 +187,544 @@ Exception 처리시 IconServiceBaseException을 상속받아 처리하기보단 
 * 트랜잭션당 한번에 최대 도합 1024번의 call, interface call, Icx 전송만 가능
 * 트랜잭션당 외부 SCORE 호출로인해 증가할 수 있는 스택사이즈는 최대 64개이다.
 * states에 의해 관리되지 않는 멤버변수는 선언할 수 없다.
+
+---
+
+## Score Sample
+### Black Jack
+#### Business flow
+1. chip 발행용 SCORE 배포
+2. BlackJack 게임용 SCORE 배포
+3. ICX로 chip 환전
+4. chip 잔액 확인
+5. 방 생성
+6. 방 목록 확인
+7. 방 입장
+8. 레디 상태 변환
+9. 게임 시작
+10. 패 돌리기
+11. 손패 보기
+12. 손패 픽스
+13. 게임 결과 확인
+14. 방 나가기
+15. ICX로 환전
+
+##### chip 발행용 SCORE 배포
+기본적인 토큰 기능과 환전 기능을 갖고 있는 Chip SCORE를 배포한다.
+```python
+from iconsdk.icon_service import IconService
+from iconsdk.providers.http_provider import HTTPProvider
+
+import icon_util as util
+
+icon_service = IconService(HTTPProvider("https://bicon.net.solidwallet.io/api/v3"))
+wallet = util.get_wallet("./keystore_rs.json", "./password.txt")
+
+signed_transaction = util.buildDeployTransaction(wallet, "./chip")
+tx_hash = icon_service.send_transaction(signed_transaction)
+print(tx_hash)
+```
+
+##### BlackJack 게임용 SCORE 배포
+블랙잭 게임용 SCORE를 배포한다. 위에서 배포한 chip SCORE 주소를 파라미터로 넘긴다.
+```python
+from iconsdk.icon_service import IconService
+from iconsdk.providers.http_provider import HTTPProvider
+
+import icon_util as util
+
+icon_service = IconService(HTTPProvider("https://bicon.net.solidwallet.io/api/v3"))
+wallet = util.get_wallet("./keystore_rs.json", "./password.txt")
+
+signed_transaction = util.buildDeployTransaction(wallet, "./blackjack", _tokenAddress="cx6c0473858b08a1905e6829d45366cb992f55a35d")
+tx_hash = icon_service.send_transaction(signed_transaction)
+print(tx_hash)
+```
+
+##### 공통파일 작성
+play_blackjack.prerequisite.py
+```python
+import icon_util as util
+
+from iconsdk.icon_service import IconService
+from iconsdk.providers.http_provider import HTTPProvider
+
+icon_service = IconService(HTTPProvider("https://bicon.net.solidwallet.io/api/v3"))
+wallets = [util.get_wallet("../keystore_rs.json", "../password.txt"),
+           util.get_wallet("../keystore_rslinux.json", "../password.txt")]
+score_address = "cx5dfa12d69495b25dccb5ddca80603d6c0f451723"
+```
+
+##### ICX로 chip 환전
+```python
+from play_blackjack.prerequisite import *
+
+for wallet in wallets:
+    signed_transaction = util.buildCallTransaction(wallet, score_address, "mintChips", 10000000000000000000)
+    result = icon_service.send_transaction(signed_transaction)
+    print(result)
+```
+
+```python
+    @external
+    @payable
+    def mintChips(self):
+        chip = self.create_interface_score(self._VDB_token_address.get(), ChipInterface)
+        chip.mint(self.msg.value)
+```
+
+##### chip 잔액 확인
+```python
+from play_blackjack.prerequisite import *
+
+for wallet in wallets:
+    call = util.buildCall(wallet, score_address, "getChipBalance")
+    result = icon_service.call(call)
+    print(int(result, 16))
+```
+
+```python
+    @external(readonly=True)
+    def getChipBalance(self) -> int:
+        chip = self.create_interface_score(self._VDB_token_address.get(), ChipInterface)
+        return chip.balanceOf(self.msg.sender)
+```
+
+##### 방 생성
+```python
+from play_blackjack.prerequisite import *
+
+signed_transaction = util.buildCallTransaction(wallets[0], score_address, "createRoom", _prizePerGame=1)
+result = icon_service.send_transaction(signed_transaction)
+print(result)
+```
+
+```python
+    @external
+    def createRoom(self, _prizePerGame: int=10):
+        # Check whether 'self.msg.sender' is now participating to game room or not
+        if self._DDB_in_game_room[self.msg.sender] is not None:
+            revert("You already joined to another room")
+
+        # Check whether the chip balance of 'self.msg.sender' exceeds the prize_per_game or not
+        chip = self.create_interface_score(self._VDB_token_address.get(), ChipInterface)
+        if chip.balanceOf(self.msg.sender) < _prizePerGame:
+            revert("Set the prize not to exceed your balance")
+
+        # Create the game room & Get in to it & Set the prize_per_game value
+        # 방을 만들고 입장. 방정보를 갱신.
+        game_room = GameRoom(self.msg.sender, self.msg.sender, self.block.height, _prizePerGame)
+        game_room.join(self.msg.sender)
+        self._DDB_game_room[self.msg.sender] = str(game_room)
+
+        #방 목록에 방 추가.
+        game_room_list = self._get_game_room_list()
+        game_room_list.put(str(game_room))
+        self._DDB_in_game_room[self.msg.sender] = self.msg.sender
+
+        # Initialize the deck of participant
+        # 방 참여자의 덱과 핸드를 초기화
+        new_deck = Deck()
+        self._DDB_deck[self.msg.sender] = str(new_deck)
+        new_hand = Hand()
+        self._DDB_hand[self.msg.sender] = str(new_hand)
+```
+
+##### 방 목록 확인
+```python
+from play_blackjack.prerequisite import *
+
+call = util.buildCall(wallets[1], score_address, "showGameRoomList")
+result = icon_service.call(call)
+print(result)
+```
+
+```python
+    def _get_game_room_list(self):
+    """게임방 리스트 반환 -> ArrayDB"""
+    return ArrayDB(self._GAME_ROOM_LIST, self._db, value_type=str)
+
+    @external(readonly=True)
+    def showGameRoomList(self) -> list:
+        response = []
+        game_room_list = self._get_game_room_list()
+
+        for game_room in game_room_list:
+            game_room_dict = json_loads(game_room)
+            game_room_id = game_room_dict['game_room_id']
+            creation_time = game_room_dict['creation_time']
+            prize_per_game = game_room_dict['prize_per_game']
+            participants = game_room_dict['participants']
+            room_has_vacant_seat = "is Full" if len(participants) > 1 else "has a vacant seat"
+            response.append(f"{game_room_id} : ({len(participants)} / 2). The room {room_has_vacant_seat}. Prize : {prize_per_game}. Creation time : {creation_time}")
+
+        return response
+```
+##### 방 입장
+```python
+from play_blackjack.prerequisite import *
+
+signed_transaction = util.buildCallTransaction(wallets[1], score_address, "joinRoom", _gameRoomId="hxb1c73381e270d401a8f8b3f969f97457cca32d6d")
+result = icon_service.send_transaction(signed_transaction)
+print(result)
+```
+
+```python
+    @external
+    def joinRoom(self, _gameRoomId: Address):
+        # Check whether the game room with game_room_id is existent or not
+        if self._DDB_game_room[_gameRoomId] is "":
+            revert(f"There is no game room which has equivalent id to {_gameRoomId}")
+
+        # Check the participant is already joined to another game_room
+        if self._DDB_in_game_room[self.msg.sender] is not None:
+            revert(f"You already joined to another game room : {self._DDB_in_game_room[self.msg.sender]}")
+
+        # 게임룸 정보 load
+        game_room_dict = json_loads(self._DDB_game_room[_gameRoomId])
+        game_room = GameRoom(Address.from_string(game_room_dict['owner']), Address.from_string(game_room_dict['game_room_id']), game_room_dict['creation_time'],
+                             game_room_dict['prize_per_game'], game_room_dict['participants'], game_room_dict['active'])
+        game_room_list = self._get_game_room_list()
+
+        # Check the chip balance of 'self.msg.sender' before getting in
+        chip = self.create_interface_score(self._VDB_token_address.get(), ChipInterface)
+        if chip.balanceOf(self.msg.sender) < game_room.prize_per_game:
+            revert(f"Not enough Chips to join this game room {_gameRoomId}. Require {game_room.prize_per_game} chips")
+
+        # Check the game room's participants. Max : 2
+        if len(game_room.participants) > 1:
+            revert(f"Full : Can not join to game room {_gameRoomId}")
+
+        # Get in to the game room
+        # 방정보 DB에 저장
+        game_room.join(self.msg.sender)
+        self._DDB_in_game_room[self.msg.sender] = _gameRoomId
+        self._DDB_game_room[_gameRoomId] = str(game_room)
+
+        # 게임룸 리스트 갱신.
+        game_room_index_gen = (index for index in range(len(game_room_list)) if game_room.game_room_id == Address.from_string(json_loads(game_room_list[index])['game_room_id']))
+
+        try:
+            index = next(game_room_index_gen)
+            game_room_list[index] = str(game_room)
+        except StopIteration:
+            pass
+
+        # Initialize the deck & hand of participant
+        new_deck = Deck()
+        self._DDB_deck[self.msg.sender] = str(new_deck)
+        new_hand = Hand()
+        self._DDB_hand[self.msg.sender] = str(new_hand)
+```
+##### 레디 상태 변환
+```python
+from play_blackjack.prerequisite import *
+
+for wallet in wallets:
+    signed_transaction = util.buildCallTransaction(wallet, score_address, "toggleReady")
+    result = icon_service.send_transaction(signed_transaction)
+    print(result)
+```
+
+```python
+    @external
+    def toggleReady(self):
+        if self._DDB_in_game_room[self.msg.sender] is None:
+            revert("Enter the game room first.")
+        if self._DDB_ready[self.msg.sender]:
+            self._DDB_ready[self.msg.sender] = False
+        else:
+            self._DDB_ready[self.msg.sender] = True
+```
+
+##### 게임 시작
+```python
+from play_blackjack.prerequisite import *
+
+signed_transaction = util.buildCallTransaction(wallets[0], score_address, "gameStart")
+result = icon_service.send_transaction(signed_transaction)
+print(result)
+```
+
+```python
+    def _bet(self, bet_from: Address, amount: int):
+        """
+        bet_from의 칩을 베팅함. 베팅한 칩은 blackjack 스코어가 맡게됨.
+        """
+        chip = self.create_interface_score(self._VDB_token_address.get(), ChipInterface)
+        chip.bet(bet_from, self.address, amount)
+
+
+    @external
+    def gameStart(self):
+        #load gameroom info
+        game_room_id = self._DDB_in_game_room[self.msg.sender]
+        game_room_dict = json_loads(self._DDB_game_room[game_room_id])
+        game_room = GameRoom(Address.from_string(game_room_dict['owner']), Address.from_string(game_room_dict['game_room_id']), game_room_dict['creation_time'],
+                             game_room_dict['prize_per_game'], game_room_dict['participants'], game_room_dict['active'])
+        participants = game_room.participants
+
+        # Check the 'self.msg.sender' == game_room.owner
+        if not self.msg.sender == game_room.owner:
+            revert("Only owner of game room can start the game")
+
+        if game_room.active:
+            revert("The last game is still active and not finalized")
+
+        # Check the number of participants
+        if len(participants) < 2:
+            revert("Please wait for a challenger to come")
+
+        # Make sure that all the participants are ready
+        for participant in participants:
+            if not self._DDB_ready[Address.from_string(participant)]:
+                revert(f"{participant} is not ready to play game")
+
+        # 베팅
+        for participant in participants:
+            self._bet(bet_from=Address.from_string(participant), amount=game_room.prize_per_game)
+
+        # Game start
+        game_room.game_start()
+        self._DDB_game_start_time[game_room_id] = self.block.height
+        self._DDB_game_room[game_room_id] = str(game_room)
+
+        # Set ready status of both participants to False after starting the game
+        for participant in participants:
+            self._DDB_ready[Address.from_string(participant)] = False
+```
+
+##### 패 돌리기
+```python
+from play_blackjack.prerequisite import *
+
+for wallet in wallets:
+    signed_transaction = util.buildCallTransaction(wallet, score_address, "hit")
+    result = icon_service.send_transaction(signed_transaction)
+    print(result)
+```
+```python
+    @external
+    def hit(self):
+        """
+        호출자에게 카드를 한장 분배하고 게임 완료 조건 만족시 승패를 계산.
+        :return:
+        """
+        game_room_id = self._DDB_in_game_room[self.msg.sender]
+        if game_room_id is None:
+            revert("You are not in game")
+
+        game_room_dict = json_loads(self._DDB_game_room[game_room_id])
+        game_room = GameRoom(Address.from_string(game_room_dict['owner']), Address.from_string(game_room_dict['game_room_id']), game_room_dict['creation_time'],
+                             game_room_dict['prize_per_game'], game_room_dict['participants'], game_room_dict['active'])
+
+        # Check whether the game is in active mode or not
+        if not game_room.active:
+            revert("The game is now in inactive mode")
+
+        # Hit and adjust the status of deck & hand
+        deck_dict = json_loads(self._DDB_deck[self.msg.sender])
+        deck = Deck(deck_dict['deck'])
+        hand_dict = json_loads(self._DDB_hand[self.msg.sender])
+        hand = Hand(hand_dict['cards'], hand_dict['value'], hand_dict['aces'], hand_dict['fix'])
+
+        # Check if the participant has already fixed hands
+        if hand.fix:
+            revert('You already fixed your hand')
+
+        if len(hand.cards) == 4:
+            hand.fix = True
+
+        #카드를 한장 분배하고 DB에 저장.
+        hand.add_card(deck.deal(self.block.timestamp, self.msg.sender))
+        hand.adjust_for_ace()
+        self._DDB_deck[self.msg.sender] = str(deck)
+        self._DDB_hand[self.msg.sender] = str(hand)
+        self.Hit(self.msg.sender, game_room_id)
+
+        # Check whether the fix status of all participants are True. And, If participant 'hand.value' exceeds 21, finalize the game. & Game must be finalized.
+        if self._check_participants_fix(game_room_id) or hand.value > 21 or self.block.height - self._DDB_game_start_time[game_room_id] > 60:
+            self.calculate(game_room_id)
+```
+
+##### 손패 보기
+```python
+from play_blackjack.prerequisite import *
+
+for wallet in wallets:
+    call = util.buildCall(wallet, score_address, "showMine")
+    result = icon_service.call(call)
+    print(result)
+```
+
+```python
+    @external(readonly=True)
+    def showMine(self) -> str:
+        hand = self._DDB_hand[self.msg.sender]
+        return hand
+```
+
+##### 손패 픽스
+```python
+from play_blackjack.prerequisite import *
+
+for wallet in wallets:
+    signed_transaction = util.buildCallTransaction(wallet, score_address, "fix")
+    result = icon_service.send_transaction(signed_transaction)
+    print(result)
+```
+
+```python
+    @external
+    def fix(self):
+        """
+        핸드를 픽스한다.(카드를 더 받지 않음) 게임 종료 조건을 만족하면 승패를 계산한다.
+        :return:
+        """
+        game_room_id = self._DDB_in_game_room[self.msg.sender]
+        hand_dict = json_loads(self._DDB_hand[self.msg.sender])
+        hand = Hand(hand_dict['cards'], hand_dict['value'], hand_dict['aces'], hand_dict['fix'])
+
+        hand.fix = True
+        self._DDB_hand[self.msg.sender] = str(hand)
+        self.Fix(self.msg.sender, game_room_id)
+
+        if self._check_participants_fix(game_room_id) or self.block.height - self._DDB_game_start_time[game_room_id] > 60:
+            self.calculate(game_room_id)
+            self.Calculate(game_room_id)
+
+
+    def calculate(self, game_room_id: Address = None):
+    """
+    승패를 계산한다.
+    :param game_room_id:
+    :return:
+    """
+    self.Calculate(game_room_id)
+    chip = self.create_interface_score(self._VDB_token_address.get(), ChipInterface)
+
+    # Finalize the game
+    self._game_stop(game_room_id)
+
+    # Calculate the result
+    # 두참여자의 핸드 정보를 가져옴.
+    game_room_dict = json_loads(self._DDB_game_room[game_room_id])
+    game_room = GameRoom(Address.from_string(game_room_dict['owner']), Address.from_string(game_room_dict['game_room_id']), game_room_dict['creation_time'],
+                         game_room_dict['prize_per_game'], game_room_dict['participants'], game_room_dict['active'])
+    participants = game_room.participants
+    participant_gen = (participant for participant in participants)
+    first_participant = next(participant_gen)
+    first_hand_dict = json_loads(self._DDB_hand[Address.from_string(first_participant)])
+    first_hand = Hand(first_hand_dict['cards'], first_hand_dict['value'], first_hand_dict['aces'], first_hand_dict['fix'])
+    second_participant = next(participant_gen)
+    second_hand_dict = json_loads(self._DDB_hand[Address.from_string(second_participant)])
+    second_hand = Hand(second_hand_dict['cards'], second_hand_dict['value'], second_hand_dict['aces'], second_hand_dict['fix'])
+
+    results = self._get_results()
+    loser = ""
+    # 승자에게 칩 전송
+    if first_hand.value > 21 or second_hand.value > 21:
+        chip.transfer(Address.from_string(first_participant), game_room.prize_per_game * 2) if second_hand.value > 21 else chip.transfer(Address.from_string(second_participant), game_room.prize_per_game * 2)
+        results.put(f"{first_participant} wins against {second_participant}.") if second_hand.value > 21 else results.put(f"{second_participant} wins against {first_participant}.")
+        loser = first_participant if first_hand.value > 21 else second_participant
+    elif first_hand.value > second_hand.value:
+        chip.transfer(Address.from_string(first_participant), game_room.prize_per_game * 2)
+        results.put(f"{first_participant} wins against {second_participant}.")
+        loser = second_participant
+    elif first_hand.value < second_hand.value:
+        chip.transfer(Address.from_string(second_participant), game_room.prize_per_game * 2)
+        results.put(f"{second_participant} wins against {first_participant}.")
+        loser = first_participant
+    else:
+        chip.transfer(Address.from_string(first_participant), game_room.prize_per_game)
+        chip.transfer(Address.from_string(second_participant), game_room.prize_per_game)
+        results.put(f"Draw!! {first_participant}, {second_participant}.")
+
+    #패자가 돈이 없으면 강퇴
+    if loser != "" and game_room.prize_per_game > chip.balanceOf(Address.from_string(loser)):
+        self._ban(game_room_id, Address.from_string(loser))
+```
+
+##### 게임 결과 확인
+```python
+from play_blackjack.prerequisite import *
+
+call = util.buildCall(wallets[0], score_address, "getResults")
+result = icon_service.call(call)
+print(result)
+```
+```python
+    @external(readonly=True)
+    def getResults(self) -> list:
+        return list(self._get_results())
+```
+
+##### 방 나가기
+```python
+from play_blackjack.prerequisite import *
+
+signed_transaction = util.buildCallTransaction(wallets[1], score_address, "escape")
+result = icon_service.send_transaction(signed_transaction)
+print(result)
+```
+```python
+    @external
+    def escape(self):
+        # Check whether 'self.msg.sender' is now participating to game room or not
+        if self._DDB_in_game_room[self.msg.sender] is None:
+            revert(f'No game room to escape')
+
+        # Retrieve the game room ID & Check the game room status
+        game_room_id_to_escape = self._DDB_in_game_room[self.msg.sender]
+        game_room_to_escape_dict = json_loads(self._DDB_game_room[game_room_id_to_escape])
+        game_room_to_escape = GameRoom(Address.from_string(game_room_to_escape_dict['owner']), Address.from_string(game_room_to_escape_dict['game_room_id']),
+                                       game_room_to_escape_dict['creation_time'], game_room_to_escape_dict['prize_per_game'],
+                                       game_room_to_escape_dict['participants'], game_room_to_escape_dict['active'])
+
+        if game_room_to_escape.active:
+            revert("The game is not finalized yet.")
+
+        # Escape from the game room
+        if game_room_to_escape.owner == self.msg.sender:
+            if len(game_room_to_escape.participants) == 1:
+                game_room_to_escape.escape(self.msg.sender)
+                self._crash_room(game_room_id_to_escape)
+            else:
+                revert("Owner can not escape from room which has the other participant")
+        else:
+            game_room_to_escape.escape(self.msg.sender)
+            self._DDB_game_room[game_room_id_to_escape] = str(game_room_to_escape)
+
+        # Set the in_game_room status of 'self.msg.sender' to None
+        game_room_list = self._get_game_room_list()
+        game_room_index_gen = (index for index in range(len(game_room_list)) if game_room_to_escape.game_room_id == Address.from_string(json_loads(game_room_list[index])['game_room_id']))
+
+        try:
+            index = next(game_room_index_gen)
+            game_room_list[index] = str(game_room_to_escape)
+        except StopIteration:
+            pass
+
+        self._DDB_in_game_room.remove(self.msg.sender)
+```
+##### ICX로 환전
+```python
+from play_blackjack.prerequisite import *
+
+for wallet in wallets:
+    signed_transaction = util.buildCallTransaction(wallet, score_address, "exchange", amount=5000000000000000000)
+    result = icon_service.send_transaction(signed_transaction)
+    print(result)
+```
+```python
+    @external
+    def exchange(self, amount: int):
+        """
+        토큰용 SCORE를 이용해 호출자의 칩을 소각하고 ICX로 환전
+        :param amount:
+        :return:
+        """
+        chip = self.create_interface_score(self._VDB_token_address.get(), ChipInterface)
+        chip.burn(amount)
+        self.icx.transfer(self.msg.sender, amount)
+```
